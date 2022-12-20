@@ -1,0 +1,75 @@
+#!/bin/bash
+LXD_CONTAINER=$1
+SPAWN_COUNT=$2
+RUNNER_URL=$3
+GITHUB_ACCESS_TOKEN=$4
+LABELS=$5
+SCOPE="repos"
+
+
+#Get currently running instances and spawn new instances if they are below SPAWN_COUNT
+#Exit early to prevent unnecessary calls to github api for new tokens
+
+#TODO: ALERT if lxc command fails meaning lxd servcie is down
+CURRENT_RUNNER_COUNT=$(lxc ls | grep github-.*RUNNING.*EPHEMERAL | wc -l)
+if [ $((( $SPAWN_COUNT - $CURRENT_RUNNER_COUNT ))) -eq 0 ]
+then
+    exit 0
+else 
+SPAWN_COUNT=$((($SPAWN_COUNT - $CURRENT_RUNNER_COUNT)))
+fi
+
+
+# This is done outside the scope of the LXD container because exporting variables is not working as expected
+_PROTO="$(echo "${RUNNER_URL}" | grep :// | sed -e's,^\(.*://\).*,\1,g')"
+_URL="$(echo "${RUNNER_URL/${_PROTO}/}")"
+_PATH="$(echo "${_URL}" | grep / | cut -d/ -f2-)"
+
+#Create the github runner service
+(
+cat << EOF
+#echo "Exchanging the GitHub Access Token with a Runner Token (scope: ${SCOPE})..."
+GH_RUNNER_TOKEN="$(curl -XPOST -fsSL \
+    -H "Authorization: token ${GITHUB_ACCESS_TOKEN}" \
+    -H "Accept: application/vnd.github.v3+json" \
+    "https://api.github.com/${SCOPE}/${_PATH}/actions/runners/registration-token" \
+    | jq -r '.token')"
+
+# Setup the systemd unit
+(
+cat << EOG
+[Unit]
+Description=github - Actions runner
+Requires=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/github-actions/
+ExecStartPre=/usr/bin/sudo -u ubuntu -i /srv/github-actions/config.sh --url $RUNNER_URL --token \$GH_RUNNER_TOKEN --unattended --ephemeral --labels=$LABELS
+ExecStart=-/usr/bin/sudo -u ubuntu -i /srv/github-actions/run.sh
+ExecStartPost=/usr/sbin/poweroff
+
+[Install]
+WantedBy=multi-user.target
+EOG
+) > /etc/systemd/system/github-actions.service
+systemctl enable github-actions
+echo NEW TOKEN \$GH_RUNNER_TOKEN RECEIVED AND DEPLOYED
+
+EOF
+) | lxc exec $LXD_CONTAINER /bin/sh
+
+
+#ephemeral github runners will be delisted (on github.com) after 1 day of being offline
+for i in $(seq ${2})
+do
+    NAME=$(mktemp -u github-XXXXXXXX)
+    lxc copy ${1} "${NAME}" --ephemeral
+    lxc start "${NAME}"
+    lxc storage volume create docker "${NAME}"
+    lxc config device add "${NAME}" docker disk pool=docker source="${NAME}" path=/var/lib/docker
+    lxc config set "${NAME}" security.nesting=true security.syscalls.intercept.mknod=true security.syscalls.intercept.setxattr=true
+    lxc restart "${NAME}"
+    echo "spanwed container ${NAME}"
+done

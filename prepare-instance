@@ -1,44 +1,50 @@
 #!/bin/sh
+
+LXD_CONTAINER=$1
+
 (
 cat << EOF
 #!/bin/sh
 set -eu
 
-apt-get install curl git --yes
+sudo apt-get update
+
+#prepare most basic dependencies
+sudo apt-get install ca-certificates curl gnupg lsb-release --yes
+
+#prepare python 3.8 environment
+sudo apt-get install python3.8-venv python3.8-dev gcc jq --yes
+
+#prepare docker and docker-compose
+sudo apt-get install apt-transport-https ca-certificates gnupg-agent software-properties-common --yes
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+sudo add-apt-repository    "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+sudo apt-get install docker-ce=5:20.10.22~3-0~ubuntu-focal docker-ce-cli=5:20.10.22~3-0~ubuntu-focal docker-compose-plugin containerd.io --yes
+
+#workaround to escape $@ to prevent script parameters to be used. We want to use legacy "docker-compose" beside the new "docker compose" 
+echo 'docker compose "$' > /bin/docker-compose
+echo '@"' > /bin/docker-compose && sed -i 's/^/docker compose "$/' /bin/docker-compose
+chmod +x /bin/docker-compose
+
+
 ARCH=x64
 [ "\$(uname -m)" = "aarch64" ] && ARCH=arm64
-curl -o /tmp/runner.tar.gz -L https://github.com/actions/runner/releases/download/v2.283.1/actions-runner-linux-\${ARCH}-2.283.1.tar.gz
+curl -o /tmp/runner.tar.gz -L https://github.com/actions/runner/releases/download/v2.299.1/actions-runner-linux-\${ARCH}-2.299.1.tar.gz
 
 # Create directory for the runner
+rm -rf /srv/github-actions/
 mkdir /srv/github-actions/
 cd /srv/github-actions/
 chown ubuntu:ubuntu /srv/github-actions/
 
 # Unpack the code
 sudo -u ubuntu -i tar zxf /tmp/runner.tar.gz -C /srv/github-actions/
+# Add ubuntu user to docker group
+sudo -su ubuntu sudo usermod -aG docker ubuntu
 
-# Setup the systemd unit
-(
-cat << EOG
-[Unit]
-Description=github - Actions runner
-Requires=network-online.target
-After=network-online.target
-
-[Service]
-Type=oneshot
-WorkingDirectory=/srv/github-actions/
-ExecStartPre=/usr/bin/sudo -u ubuntu -i /srv/github-actions/config.sh --url ${2} --token ${3} --unattended --ephemeral --labels=${4}
-ExecStart=-/usr/bin/sudo -u ubuntu -i /srv/github-actions/run.sh
-ExecStartPost=/usr/sbin/poweroff
-
-[Install]
-WantedBy=multi-user.target
-EOG
-) > /etc/systemd/system/github-actions.service
-systemctl enable github-actions
+echo "ALL SETUP"
 
 # Cleanup
 rm /tmp/runner.tar.gz
 EOF
-) | lxc exec $1 /bin/sh
+) | lxc exec $LXD_CONTAINER /bin/sh
