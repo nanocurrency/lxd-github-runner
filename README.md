@@ -12,6 +12,10 @@ then self-destroy. This is to avoid running jobs in unclean
 environments, preventing one job from impacting or attacking the next.
 
 
+# Installing LXD
+```
+sudo apt-get install lxd-client
+```
 # Creating a suitable base instance
 
 For example, for an Ubuntu 20.04 container, you'd use:
@@ -21,11 +25,6 @@ lxc launch images:ubuntu/20.04 gh-runner
 
 ### Do Once : 
 
-Prepare the LXD container with all its depedencies 
-```
-./prepare-instance gh-runner
-```
-
 Setup a PAT (Personal access token) with access to the repos and orgs you want serviced. 
 https://docs.github.com/en/github/authenticating-to-github/creating-a-personal-access-token
 - Enable the following scopes:
@@ -34,11 +33,17 @@ https://docs.github.com/en/github/authenticating-to-github/creating-a-personal-a
 	-  admin:org
 	-  admin:repo_hook
 
+
+Prepare the LXD container with all its depedencies 
+(You might need to modify this to fit your needs)
+```
+./prepare-instance gh-runner
+```
+
 # Starting some runners
 
-### Create cronjob : 
+### Spawn LXD github-runners : 
 
-Create a cronjob that executes the following job :
 
 ```
 ./respawn gh-runner RUNNER_COUNT https://github.com/ORG/REPO PAT label1,label2
@@ -50,9 +55,10 @@ Create a cronjob that executes the following job :
 - PAT (starting with ghg_...)
 - LABELS (optinal)
 
+Create a cronjob that executes job above once per minute to respawn any number of missing runners :
+
 ``` bash
 crontab -e
-
 >>>
 * * * * * /path/to/lxd-runner/respawn gh-runner RUNNER_COUNT https://github.com/ORG/REPO PAT 
 ```
