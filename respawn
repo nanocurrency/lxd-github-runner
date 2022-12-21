@@ -18,13 +18,12 @@ for container in $(lxc storage volume list docker | grep "github-.*| 0" |awk '{p
 #TODO: ALERT if lxc command fails meaning lxd servcie is down
 CURRENT_RUNNER_COUNT=$(lxc ls | grep github-.*RUNNING.*EPHEMERAL | wc -l)
 if [ $((( $SPAWN_COUNT - $CURRENT_RUNNER_COUNT ))) -le 0 ]
-then
+then    
     exit 0
 else 
 SPAWN_COUNT=$((($SPAWN_COUNT - $CURRENT_RUNNER_COUNT)))
 fi
 
-exit 0
 
 
 # This is done outside the scope of the LXD container because exporting variables is not working as expected
