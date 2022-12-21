@@ -15,7 +15,15 @@ environments, preventing one job from impacting or attacking the next.
 # Installing LXD
 ```
 sudo apt-get install lxd-client
+
+lxd init
+#you can use all the defaults
+
+#Add new storge pool called docker (docker needs btrfs to work properly, so we named its storage pool docker)
+lxc storage create docker btrfs source=/var/lxd/disks size=30GB
 ```
+
+
 # Creating a suitable base instance
 
 For example, for an Ubuntu 20.04 container, you'd use:
