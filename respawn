@@ -25,7 +25,6 @@ SPAWN_COUNT=$((($SPAWN_COUNT - $CURRENT_RUNNER_COUNT)))
 fi
 
 
-
 # This is done outside the scope of the LXD container because exporting variables is not working as expected
 _PROTO="$(echo "${RUNNER_URL}" | grep :// | sed -e's,^\(.*://\).*,\1,g')"
 _URL="$(echo "${RUNNER_URL/${_PROTO}/}")"
@@ -68,10 +67,10 @@ EOF
 
 
 #ephemeral github runners will be delisted (on github.com) after 1 day of being offline
-for i in $(seq ${2})
+for i in $(seq ${SPAWN_COUNT})
 do
     NAME=$(mktemp -u github-XXXXXXXX)
-    lxc copy ${1} "${NAME}" --ephemeral
+    lxc copy ${LXD_CONTAINER} "${NAME}" --ephemeral
     lxc start "${NAME}"
     lxc storage volume create docker "${NAME}"
     lxc config device add "${NAME}" docker disk pool=docker source="${NAME}" path=/var/lib/docker
