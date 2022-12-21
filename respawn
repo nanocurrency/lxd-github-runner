@@ -7,6 +7,11 @@ LABELS=$5
 SCOPE="repos"
 
 
+#Disk space is not freed up automatically when a container is removed.
+#Free up disk space for any github- runner that is not active
+for container in $(lxc storage volume list docker | grep "github-.*| 0" |awk '{print $4}'); do lxc storage volume delete docker $container; done
+
+
 #Get currently running instances and spawn new instances if they are below SPAWN_COUNT
 #Exit early to prevent unnecessary calls to github api for new tokens
 
